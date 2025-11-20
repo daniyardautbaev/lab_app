@@ -36,11 +36,10 @@ async function initClient() {
   return clientPromise;
 }
 
-
 // -------- Маршруты ----------
 
 // Главная страница
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
   if (!req.session.userinfo) {
     return res.send(`
       <h1>Lab App</h1>
@@ -67,8 +66,8 @@ app.get('/login', async (req, res) => {
     const client = await initClient();
 
     const authorizationUrl = client.authorizationUrl({
-      scope: 'openid discipline', // ВАЖНО: запрашиваем discipline
-      // Без PKCE: не передаём code_challenge
+      scope: 'openid discipline',   // запрашиваем scope discipline
+      prompt: 'login',              // каждый раз показывать логин-форму
     });
 
     res.redirect(authorizationUrl);
@@ -84,13 +83,21 @@ app.get('/callback', async (req, res) => {
     const client = await initClient();
     const params = client.callbackParams(req);
 
-    // Без PKCE — просто callback
     const tokenSet = await client.callback('http://localhost:3000/callback', params);
 
-    // Забираем данные о пользователе
-    const userinfo = await client.userinfo(tokenSet.access_token);
+    // 1) Смотрим клеймы из ID-токена
+    const claims = tokenSet.claims();
+    console.log('=== ID TOKEN CLAIMS ===');
+    console.log(claims);
 
-    req.session.userinfo = userinfo;
+    // 2) Смотрим userinfo
+    const userinfo = await client.userinfo(tokenSet.access_token);
+    console.log('=== USERINFO ===');
+    console.log(userinfo);
+
+    // 3) Склеиваем всё вместе (если discipline придёт хоть где-то — увидим)
+    req.session.userinfo = { ...claims, ...userinfo };
+
     res.redirect('/');
   } catch (err) {
     console.error(err);
